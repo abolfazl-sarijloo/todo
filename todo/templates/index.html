@@ -1,0 +1,83 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TODO List</title>
+  <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+</head>
+<body class="bg-light">
+<div class="container py-5">
+  <h1>📝 TODO</h1>
+
+  <form id="todoForm" class="d-flex gap-2 mb-4">
+  {% csrf_token %}
+    <input id="todoTitle" class="form-control" placeholder="New todo">
+    <button class="btn btn-primary">Add</button>
+  </form>
+
+  <ul id="todoList" class="list-group"></ul>
+</div>
+
+<script>
+  const API = '/api/todos/';
+
+  async function loadTodos() {
+    const res = await fetch(API);
+    const todos = await res.json();
+  
+    const list = document.getElementById("todoList");
+    list.innerHTML = "";
+  
+    for (let todo of todos) {
+      const li = document.createElement("li");
+      li.className = "list-group-item";
+      li.innerHTML = `<strong>${todo.title}</strong>`;
+      list.appendChild(li);
+    }
+  }
+  
+  document.getElementById("todoForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const title = document.getElementById("todoTitle").value;
+  
+    if (!title.trim()) return;
+  
+    await fetch(API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')  // مهم!
+      },
+      body: JSON.stringify({
+        title: title,
+        description: ""
+      })
+    });
+  
+    document.getElementById("todoTitle").value = "";
+    loadTodos();
+  });
+  
+  // تابع گرفتن csrf
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let cookie of cookies) {
+        const cookieTrimmed = cookie.trim();
+        if (cookieTrimmed.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookieTrimmed.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  
+  document.addEventListener("DOMContentLoaded", loadTodos);
+</script>
+  
+<script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>
