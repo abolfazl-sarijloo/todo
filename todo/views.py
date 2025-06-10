@@ -31,8 +31,14 @@ class TodoViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+
 class TodoItemViewSet(viewsets.ModelViewSet):
     serializer_class = TodoItemSerializer
+
+
+    def perform_create(self, serializer):
+        todo_id = self.kwargs["todo_pk"]
+        serializer.save(todo_id=todo_id)  # 👈 این عالیه!
 
     def get_queryset(self):
         todo_id = self.kwargs["todo_pk"]

@@ -14,5 +14,3 @@ urlpatterns = [
     path('', include(router.urls)),
     path('', include(nested_router.urls)),
 ]
-
-urlpatterns += router.urls + nested_router.urls

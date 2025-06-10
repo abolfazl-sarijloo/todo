@@ -11,55 +11,266 @@
   <h1>📝 TODO</h1>
 
   <form id="todoForm" class="d-flex gap-2 mb-4">
-  {% csrf_token %}
+    {% csrf_token %}
     <input id="todoTitle" class="form-control" placeholder="New todo">
+    <input id="todoDesc" class="form-control" placeholder="Description">
     <button class="btn btn-primary">Add</button>
   </form>
 
   <ul id="todoList" class="list-group"></ul>
 </div>
 
+<!-- Modal for Confirm Complete -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmModalLabel">Are you sure?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Do you really want to mark this task as <span id="modalCompleteAction"></span>?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="confirmCompleteBtn" class="btn btn-success">Yes, do it</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Adding Item -->
+<div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addItemModalLabel">Add Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="addItemForm">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="itemTitle" class="form-label">Title</label>
+            <input type="text" class="form-control" id="itemTitle" required>
+          </div>
+          <div class="mb-3">
+            <label for="itemDesc" class="form-label">Description</label>
+            <textarea class="form-control" id="itemDesc" rows="3"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   const API = '/api/todos/';
+  let selectedTodoId = null;
+  let selectedCheckbox = null;
+  let toggleComplete = false;
+  let itemAddTodoId = null;
 
   async function loadTodos() {
     const res = await fetch(API);
     const todos = await res.json();
-  
+
     const list = document.getElementById("todoList");
     list.innerHTML = "";
-  
+
     for (let todo of todos) {
       const li = document.createElement("li");
       li.className = "list-group-item";
-      li.innerHTML = `<strong>${todo.title}</strong>`;
+
+      const header = document.createElement("div");
+      header.className = "d-flex justify-content-between align-items-center";
+
+      const left = document.createElement("div");
+      left.className = "d-flex align-items-center gap-2 w-100";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = todo.completed;
+      checkbox.className = "form-check-input me-2";
+      checkbox.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selectedTodoId = todo.id;
+        selectedCheckbox = checkbox;
+        toggleComplete = checkbox.checked;
+        document.getElementById("modalCompleteAction").innerText = toggleComplete ? 'incomplete' : 'complete';
+        new bootstrap.Modal(document.getElementById('confirmModal')).show();
+        checkbox.checked = !checkbox.checked;
+      });
+
+      const text = document.createElement("span");
+      text.innerHTML = `<strong>${todo.title}</strong><br><small>${todo.description}</small>`;
+      text.style.cursor = "pointer";
+      text.className = "flex-grow-1";
+      text.addEventListener("click", () => toggleTodoItems(todo.id, itemList));
+
+      left.appendChild(checkbox);
+      left.appendChild(text);
+
+      const btnGroup = document.createElement("div");
+      btnGroup.className = "btn-group";
+
+      const addItemBtn = document.createElement("button");
+      addItemBtn.className = "btn btn-success btn-sm";
+      addItemBtn.innerText = "+ Item";
+      addItemBtn.addEventListener("click", () => {
+        itemAddTodoId = todo.id;
+        document.getElementById("itemTitle").value = "";
+        document.getElementById("itemDesc").value = "";
+        new bootstrap.Modal(document.getElementById('addItemModal')).show();
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-danger btn-sm";
+      delBtn.innerText = "🗑";
+      delBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await fetch(API + todo.id + '/', { method: 'DELETE' });
+        loadTodos();
+      });
+
+      btnGroup.appendChild(addItemBtn);
+      btnGroup.appendChild(delBtn);
+
+      header.appendChild(left);
+      header.appendChild(btnGroup);
+
+      const itemList = document.createElement("ul");
+      itemList.className = "list-group mt-2";
+
+      li.appendChild(header);
+      li.appendChild(itemList);
       list.appendChild(li);
     }
   }
-  
+
+  async function toggleTodoItems(todoId, itemList) {
+    if (itemList.childElementCount === 0) {
+      const res = await fetch(`/api/todos/${todoId}/items/`);
+      const items = await res.json();
+      if (items.length === 0) {
+        const noItem = document.createElement("li");
+        noItem.className = "list-group-item text-muted";
+        noItem.innerText = "No items available.";
+        itemList.appendChild(noItem);
+        return;
+      }
+      for (let item of items) {
+        const itemLi = document.createElement("li");
+        itemLi.className = "list-group-item d-flex justify-content-between align-items-center";
+
+        const itemLeft = document.createElement("div");
+        itemLeft.className = "d-flex align-items-center gap-2";
+
+        const itemCheckbox = document.createElement("input");
+        itemCheckbox.type = "checkbox";
+        itemCheckbox.checked = item.completed;
+        itemCheckbox.className = "form-check-input me-2";
+        itemCheckbox.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await fetch(`/api/todos/${todoId}/items/${item.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ completed: !item.completed })
+          });
+          loadTodos();
+        });
+
+        const itemText = document.createElement("span");
+        itemText.innerHTML = `<strong>${item.title}</strong><br><small>${item.description}</small>`;
+
+        itemLeft.appendChild(itemCheckbox);
+        itemLeft.appendChild(itemText);
+
+        const itemDel = document.createElement("button");
+        itemDel.className = "btn btn-danger btn-sm";
+        itemDel.innerText = "🗑";
+        itemDel.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await fetch(`/api/todos/${todoId}/items/${item.id}/`, { method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+          },
+        });
+          loadTodos();
+        });
+
+        itemLi.appendChild(itemLeft);
+        itemLi.appendChild(itemDel);
+        itemList.appendChild(itemLi);
+      }
+    } else {
+      itemList.innerHTML = "";
+    }
+  }
+
+  document.getElementById("confirmCompleteBtn").addEventListener("click", async () => {
+    if (selectedTodoId !== null) {
+      await fetch(API + selectedTodoId + '/', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ completed: toggleComplete })
+      });
+      selectedTodoId = null;
+      loadTodos();
+    }
+    bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+  });
+
   document.getElementById("todoForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const title = document.getElementById("todoTitle").value;
-  
+    const description = document.getElementById("todoDesc").value;
+
     if (!title.trim()) return;
-  
+
     await fetch(API, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRFToken': getCookie('csrftoken')  // مهم!
+        'X-CSRFToken': getCookie('csrftoken')
       },
-      body: JSON.stringify({
-        title: title,
-        description: ""
-      })
+      body: JSON.stringify({ title, description })
     });
-  
+
     document.getElementById("todoTitle").value = "";
+    document.getElementById("todoDesc").value = "";
     loadTodos();
   });
-  
-  // تابع گرفتن csrf
+
+  document.getElementById("addItemForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const title = document.getElementById("itemTitle").value;
+    const description = document.getElementById("itemDesc").value;
+
+    if (!title.trim() || !itemAddTodoId) return;
+
+    await fetch(`/api/todos/${itemAddTodoId}/items/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({ title, description })
+    });
+
+    itemAddTodoId = null;
+    bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+    loadTodos();
+  });
+
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -74,10 +285,10 @@
     }
     return cookieValue;
   }
-  
+
   document.addEventListener("DOMContentLoaded", loadTodos);
 </script>
-  
+
 <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
 </body>
 </html>
